@@ -11,7 +11,6 @@ class GracefulKiller(object):
     def __init__(self):
         logging.basicConfig(level=logging.DEBUG,
                             format='%(asctime)s %(levelname)s %(name)s: %(message)s')
-        logging.getLogger().addHandler(logging.StreamHandler())
         import signal
         signal.signal(signal.SIGINT, self.exit_gracefully)
         signal.signal(signal.SIGTERM, self.exit_gracefully)

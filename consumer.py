@@ -161,6 +161,8 @@ class CoordinatorManager(object):
         logger.info("Consumer starting from %d to %d" % (start_index, end_index))
         # Update topic list according to random numbers here.
         self.consumer.start(start_index, end_index)
+        consumer_topic = "house/bulb"
+        self.consumer.subscribe(consumer_topic)
 
     def random_number_acc(self, client, userdata, message):
         logger.info("Received message %s", message.payload)
