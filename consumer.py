@@ -1,20 +1,23 @@
-
+"""Coordinated MQTT consumer."""
 import logging
 import random
-import sys
+import threading
 import time
 
 import paho.mqtt.client as paho
 
-from utils.constants import BROKER, CONSUMER_CLIENTID, NUMBER_OF_PARTITION
+from utils.constants import (BROKER, CONSUMER_CLIENTID, NUMBER_OF_PARTITION,
+                             TEST_TOPIC)
 from utils.graceful_killer import GracefulKiller
 
 logger = logging.getLogger(__name__)
+__author__ = "Prashant"
 
 
 class CoordinatedConsumer(object):
     clients = []
     on_message = None
+    topics = []
 
     def __init__(self, client_id, clean_session=False):
         self.client_id = client_id
@@ -34,12 +37,26 @@ class CoordinatedConsumer(object):
             client.on_message = self.log_message
             client.loop_start()
             self.clients.append(client)
+        self._subscribe_all()
 
     def subscribe(self, topic, qos=1):
+        self.topics.append({'topic': topic, 'qos': qos})
+        self._unsubscribe_all()
+        self._subscribe_all()
+
+    def _unsubscribe_all(self):
         for client in self.clients:
-            topic_p = topic + "/" + str(client._userdata['partition'])
-            logger.info("Subscribing to topic: %s", topic_p)
-            client.subscribe(topic_p, qos)
+            for topic_obj in self.topics:
+                topic_p = topic_obj['topic'] + "/" + str(client._userdata['partition'])
+                logger.info("Unsubscribing to topic: %s", topic_p)
+                client.unsubscribe(topic_p)
+
+    def _subscribe_all(self):
+        for client in self.clients:
+            for topic_obj in self.topics:
+                topic_p = topic_obj['topic'] + "/" + str(client._userdata['partition'])
+                logger.info("Subscribing to topic: %s", topic_p)
+                client.subscribe(topic_p, topic_obj['qos'])
 
     def disconnect(self):
         for client in self.clients:
@@ -51,35 +68,34 @@ class CoordinatedConsumer(object):
     @staticmethod
     def log_message(client, userdata, message):
         logger.debug("received message =%s", str(message.payload.decode("utf-8")))
-        if userdata['consumer'].on_message != None:
+        if userdata['consumer'].on_message is not None:
             userdata['consumer'].on_message(client, userdata, message)
 
 
 class CoordinatorManager(object):
-
-    myrandom = 0
     randoms = []
-    rebalance_message = "My Random Number: "
+    negotiation_topic = "manager/negotiate"
+    manager_status_topic = "manager/management/rebalance"
+    state = ""
 
     def __init__(self):
         self.consumer = CoordinatedConsumer(CONSUMER_CLIENTID, clean_session=False)
         self.manager_cid = 'MANAGER' + CONSUMER_CLIENTID + str(random.randint(0, 200))
-        self.manager_topic = "manager/management/live"
-
         self.manager = paho.Client(self.manager_cid, userdata={'consumer': self.consumer})
 
     def start(self):
         self.manager.connect(BROKER)
-        self.manager.will_set(self.manager_topic,
+        self.manager.will_set(self.manager_status_topic,
                               "I am Unexpectedly Dieing, Please take care %s :-(" % self.manager_cid, qos=1)
-        self.manager.on_message = self.rebalance_start
+        self.manager.on_message = self.topicwise_on_message
         self.manager.loop_start()
-        self.manager.subscribe(self.manager_topic)
-        self.manager.publish(self.manager_topic, "I am Live " + self.manager_cid)
+        self.manager.subscribe(self.manager_status_topic)
+        self.manager.publish(self.manager_status_topic, "I am Live " + self.manager_cid)
 
     def stop(self):
         self.manager.on_message = None
-        self.manager.publish(self.manager_topic, "I am dieing Gracefully %s :-)" % self.manager_cid)
+        self.manager.publish(self.manager_status_topic,
+                             "I am dieing Gracefully %s :-)" % self.manager_cid)
         self.manager.disconnect()
         self.manager.loop_stop()
 
@@ -90,6 +106,12 @@ class CoordinatorManager(object):
     @property
     def coordinator_manager(self):
         return self.manager
+
+    def topicwise_on_message(self, client, userdata, message):
+        if message.topic == self.manager_status_topic:
+            self.rebalance_start(client, userdata, message)
+        elif message.topic == self.negotiation_topic:
+            self.random_number_acc(client, userdata, message)
 
     def rebalance_start(self, client, userdata, message):
         """Rebalance strategy
@@ -104,49 +126,48 @@ class CoordinatorManager(object):
         Validatation of number of clients online.
         publish number of responses received on rebalance topic. Also read others count
         on same topic. If count doesn't match, do rebalance again.
+
+        Note:
+            This logic is not safe for remote mqtt servers long delays.
         """
-        logger.info("received message from manager")
-        self.consumer.disconnect()
-        time.sleep(1)
-        logger.debug("one second after disconnect...")
-        self.myrandom = random.randint(0, 100000)
+        logger.info("received message from manager %s " % message.payload)
+        if self.state == "rebalancing":
+            # Remove client id if someone is disconnecting. So that random won't be incorrect
+            logger.info("Already Rebalancing, Skipping this.")
+            return
+        self.state = "rebalancing"
+        threading._start_new_thread(self.consumer.disconnect, ())  # Disconnect async.
         self.randoms = []
 
-        self.rebalance_topic = "manager/rebalance"
-        self.manager.unsubscribe(self.manager_topic)
-        self.manager.on_message = self.random_number_acc
-        self.manager.subscribe(self.rebalance_topic)
+        self.manager.subscribe(self.negotiation_topic)
 
-        import threading
         threading._start_new_thread(self.thread_exec, ())
         return 0
 
     def thread_exec(self):
         """Reassign Partition numbers to consumer.
 
-        wait for 3 seconds to get random number from each client. Sort those
-        number and calculate which partitions to assign to current consumer.
+        wait for 3 seconds to get Client ids of each live client. Sort those
+        client ids and calculate which partitions to assign to current consumer.
         Start current consumer with those assigned partitions.
         """
         logger.info("Negotiation thread started")
         for i in range(6):
             logger.debug("sleeping " + str(i))
             # Keep publishing, so late comers will also get it.
-            self.manager.publish(self.rebalance_topic, self.rebalance_message + str(self.myrandom))
+            self.manager.publish(self.negotiation_topic, self.manager_cid)
             time.sleep(0.5)
 
         # Add validation here....
-        self.manager.unsubscribe(self.rebalance_topic)
-        self.manager.subscribe(self.manager_topic)
-        self.manager.on_message = self.rebalance_start
+        self.manager.unsubscribe(self.negotiation_topic)
 
         self.randoms = list(set(self.randoms))
         self.randoms.sort()
 
         logger.info("After waiting for 5 seconds for rebalance messages. ")
-        logger.info("My random %d all randoms %r", self.myrandom, self.randoms)
+        logger.info("My Cid %s all randoms %r", self.manager_cid, self.randoms)
 
-        index = self.randoms.index(self.myrandom)
+        index = self.randoms.index(self.manager_cid)
         count = len(self.randoms)
         batch_size = NUMBER_OF_PARTITION / count
         if NUMBER_OF_PARTITION % count != 0:
@@ -161,13 +182,12 @@ class CoordinatorManager(object):
         logger.info("Consumer starting from %d to %d" % (start_index, end_index))
         # Update topic list according to random numbers here.
         self.consumer.start(start_index, end_index)
-        consumer_topic = "house/bulb"
-        self.consumer.subscribe(consumer_topic)
+        time.sleep(2)  # Wait before stoping rebalance, Some messages come late
+        self.state = ""
 
     def random_number_acc(self, client, userdata, message):
         logger.info("Received message %s", message.payload)
-        if message.payload[:18] == self.rebalance_message:
-            self.randoms.append(int(message.payload[18:]))
+        self.randoms.append(message.payload)
 
 
 def on_message(client, userdata, message):
@@ -184,7 +204,7 @@ if __name__ == '__main__':
     consumer = manager.coordinated_consumer
     consumer.start(0, 0)
     consumer.on_message = on_message
-    consumer.subscribe("house/bulb")
+    consumer.subscribe(TEST_TOPIC)
     for i in range(100):
         time.sleep(10)
         if killer.kill_now:
