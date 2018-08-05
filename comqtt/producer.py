@@ -27,8 +27,4 @@ class CoordinatedProducer(object):
 
 
 if __name__ == '__main__':
-    coordinated_producer = CoordinatedProducer()
-    for i in range(0, 10):
-        print("publishing on " + str(i))
-        coordinated_producer.publish_on_partition("house/bulb/", "on" + str(i))
-        time.sleep(0.01)
+    pass

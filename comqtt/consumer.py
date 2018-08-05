@@ -6,9 +6,7 @@ import time
 
 import paho.mqtt.client as paho
 
-from utils.constants import (BROKER, CONSUMER_CLIENTID, NUMBER_OF_PARTITION,
-                             TEST_TOPIC)
-from utils.graceful_killer import GracefulKiller
+from utils.constants import BROKER, CONSUMER_CLIENTID, NUMBER_OF_PARTITION
 
 logger = logging.getLogger(__name__)
 __author__ = "Prashant"
@@ -179,7 +177,7 @@ class CoordinatorManager(object):
         if(end_index > NUMBER_OF_PARTITION):  # Last partition, Assign all remaining partitions
             end_index = NUMBER_OF_PARTITION
 
-        logger.info("Consumer starting from %d to %d" % (start_index, end_index))
+        logger.info("%s Consumer starting from %d to %d", self.manager_cid, start_index, end_index)
         # Update topic list according to random numbers here.
         self.consumer.start(start_index, end_index)
         time.sleep(2)  # Wait before stoping rebalance, Some messages come late
@@ -190,24 +188,5 @@ class CoordinatorManager(object):
         self.randoms.append(message.payload)
 
 
-def on_message(client, userdata, message):
-    logger.info("Processing message from clients topic: %s payload: %s",
-                message.topic, message.payload)
-
-
 if __name__ == '__main__':
-    killer = GracefulKiller()
-
-    manager = CoordinatorManager()
-    manager.start()
-
-    consumer = manager.coordinated_consumer
-    consumer.start(0, 0)
-    consumer.on_message = on_message
-    consumer.subscribe(TEST_TOPIC)
-    for i in range(100):
-        time.sleep(10)
-        if killer.kill_now:
-            consumer.disconnect()
-            break
-    manager.stop()
+    pass
