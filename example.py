@@ -2,7 +2,7 @@ import logging
 import threading
 import time
 
-from comqtt import CoordinatedProducer, CoordinatorManager
+from mqtt import CoordinatedProducer, CoordinatorManager
 from utils.constants import TEST_TOPIC
 from utils.graceful_killer import GracefulKiller
 
@@ -23,20 +23,12 @@ def on_message(client, userdata, message):
 
 
 def consumer():
-    # killer = GracefulKiller()
-
     manager = CoordinatorManager()
     manager.start()
 
     consumer = manager.coordinated_consumer
-    consumer.start(0, 0)
     consumer.on_message = on_message
     consumer.subscribe(TEST_TOPIC)
-    # for i in range(100):
-    #     time.sleep(10)
-    #     if killer.kill_now:
-    #         consumer.disconnect()
-    #         break
     time.sleep(20)
     consumer.disconnect()
     manager.stop()

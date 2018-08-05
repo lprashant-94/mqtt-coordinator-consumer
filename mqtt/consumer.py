@@ -26,6 +26,9 @@ class CoordinatedConsumer(object):
         self.start()
 
     def start(self, start_index=None, end_index=None):
+        if self.clients:
+            logger.error("Can't start Consumer, Clients are not disconnected")
+            raise AssertionError("Can't start Consumer, Clients are not disconnected")
         self.start_index = start_index if start_index is not None else self.start_index
         self.end_index = end_index if end_index is not None else self.end_index
         for i in range(self.start_index, self.end_index):
@@ -57,6 +60,7 @@ class CoordinatedConsumer(object):
                 client.subscribe(topic_p, topic_obj['qos'])
 
     def disconnect(self):
+        self._unsubscribe_all()
         for client in self.clients:
             logger.info("disconnecting clients %s", client._client_id)
             client.disconnect()
