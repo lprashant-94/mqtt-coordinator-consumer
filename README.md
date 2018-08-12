@@ -2,7 +2,7 @@
 
 Kafka Motivated Coordinated Consumer for MQTT
 
-## Auto Rebalance 
+`pip install mqtt-coordinated`
 
 ## MQTT Consumer CoordinatorManager
 
@@ -11,12 +11,12 @@ CoordinatorManager class is manager class for mqtt consumer. It lets you connect
 ```
 >>> from mqtt import CoordinatorManager
 >>> 
->>> manager = CoordinatorManager()
+>>> manager = CoordinatorManager('my-manager', 'iot.eclipse.org')
 >>> manager.start()
 >>> 
 >>> consumer = manager.coordinated_consumer
 >>> consumer.on_message = on_message  # Pass callback name here.
->>> consumer.subscribe("/Topic/name")
+>>> consumer.subscribe("house/bulb")
 ```
 
 ```
@@ -31,8 +31,8 @@ CoordinatedProducer class is MQTT producer which will create number of partition
 
 ```
 >>> from mqtt import CoordinatedProducer
->>> producer = CoordinatedProducer()
->>> producer.publish_on_partition("house/bulb/", "on") # Message will be published on random partition
->>> producer.publish_on_partition("house/bulb/", "on", partition=5) # Message will be published on 5th partition
->>> producer.publish_on_partition("house/bulb/", "on", partition_key='message_key') # All messages with partition_key will be published on same partition.
+>>> producer = CoordinatedProducer('iot.eclipse.org')
+>>> producer.publish_on_partition("house/bulb", "on") # Message will be published on random partition
+>>> producer.publish_on_partition("house/bulb", "on", partition=5) # Message will be published on 5th partition
+>>> producer.publish_on_partition("house/bulb", "on", partition_key='message_key') # All messages with partition_key will be published on same partition.
 ```
