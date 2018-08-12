@@ -5,16 +5,16 @@ import uuid
 
 import paho.mqtt.client as paho
 
-from utils.constants import BROKER, NUMBER_OF_PARTITION
+from utils.constants import NUMBER_OF_PARTITION
 
 
 class CoordinatedProducer(object):
 
-    def __init__(self):
+    def __init__(self, host, port=1883):
         self.client_id = str(uuid.uuid4())
         self.client = paho.Client(self.client_id)
 
-        self.client.connect(BROKER)
+        self.client.connect(host, port=port)
 
     def publish_on_partition(self, topic, message, partition=None, partition_key=None):
         if partition is None:
@@ -23,7 +23,7 @@ class CoordinatedProducer(object):
             else:
                 partition = random.randint(0, NUMBER_OF_PARTITION - 1)
 
-        self.client.publish(topic + str(partition), message, qos=1)
+        self.client.publish(topic + '/' + str(partition), message, qos=1)
 
 
 if __name__ == '__main__':

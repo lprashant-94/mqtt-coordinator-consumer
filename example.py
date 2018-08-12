@@ -3,17 +3,20 @@ import threading
 import time
 
 from mqtt import CoordinatedProducer, CoordinatorManager
-from utils.constants import TEST_TOPIC
 from utils.graceful_killer import GracefulKiller
 
 logger = logging.getLogger(__name__)
+BROKER = "localhost"
+# BROKER = "iot.eclipse.org"
+CONSUMER_CLIENTID = "mqtt_consumer-"
+TEST_TOPIC = "house/bulb"  # Remove this topic
 
 
 def producer():
-    coordinated_producer = CoordinatedProducer()
+    coordinated_producer = CoordinatedProducer(BROKER)
     for i in range(0, 10):
         logger.info("publishing on " + str(i))
-        coordinated_producer.publish_on_partition("house/bulb/", "on" + str(i))
+        coordinated_producer.publish_on_partition(TEST_TOPIC, "on" + str(i))
         time.sleep(0.01)
 
 
@@ -23,7 +26,7 @@ def on_message(client, userdata, message):
 
 
 def consumer():
-    manager = CoordinatorManager()
+    manager = CoordinatorManager('my-manager', BROKER)
     manager.start()
 
     consumer = manager.coordinated_consumer

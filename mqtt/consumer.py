@@ -6,7 +6,7 @@ import time
 
 import paho.mqtt.client as paho
 
-from utils.constants import BROKER, CONSUMER_CLIENTID, NUMBER_OF_PARTITION
+from utils.constants import NUMBER_OF_PARTITION
 
 logger = logging.getLogger(__name__)
 __author__ = "Prashant"
@@ -17,7 +17,8 @@ class CoordinatedConsumer(object):
     on_message = None
     topics = []
 
-    def __init__(self, client_id, clean_session=False):
+    def __init__(self, client_id, broker, clean_session=False, ):
+        self.broker = broker
         self.client_id = client_id
         self.clean_session = clean_session
 
@@ -34,7 +35,7 @@ class CoordinatedConsumer(object):
         for i in range(self.start_index, self.end_index):
             client = paho.Client(self.client_id + str(i), clean_session=self.clean_session,
                                  userdata={'partition': i, 'consumer': self})
-            client.connect(BROKER)
+            client.connect(host=self.broker[0], port=self.broker[1])
             client.on_message = self.log_message
             client.loop_start()
             self.clients.append(client)
@@ -76,27 +77,38 @@ class CoordinatedConsumer(object):
 
 class CoordinatorManager(object):
     randoms = []
-    negotiation_topic = "manager/negotiate"
-    manager_status_topic = "manager/management/rebalance"
+    cid_fmt = 'manager-{g_id}-{salt}'
     state = ""
 
-    def __init__(self):
-        self.consumer = CoordinatedConsumer(CONSUMER_CLIENTID, clean_session=False)
-        self.manager_cid = 'MANAGER' + CONSUMER_CLIENTID + str(random.randint(0, 200))
+    @property
+    def _negotiation_topic(self):
+        negotiation_topic_s = "manager/{g_id}/negotiate"
+        return negotiation_topic_s.format(g_id=self.group_id)
+
+    @property
+    def _manager_status_topic(self):
+        manager_status_topic_s = "manager/{g_id}/rebalance"
+        return manager_status_topic_s.format(g_id=self.group_id)
+
+    def __init__(self, group_id, host, port=1883):
+        self.broker = (host, port)
+        self.group_id = group_id
+        self.consumer = CoordinatedConsumer(self.group_id, self.broker, clean_session=False)
+        self.manager_cid = self.cid_fmt.format(g_id=self.group_id, salt=random.randint(0, 200))
         self.manager = paho.Client(self.manager_cid, userdata={'consumer': self.consumer})
 
     def start(self):
-        self.manager.connect(BROKER)
-        self.manager.will_set(self.manager_status_topic,
+        self.manager.connect(self.broker[0], port=self.broker[1])
+        self.manager.will_set(self._manager_status_topic,
                               "I am Unexpectedly Dieing, Please take care %s :-(" % self.manager_cid, qos=1)
         self.manager.on_message = self.topicwise_on_message
         self.manager.loop_start()
-        self.manager.subscribe(self.manager_status_topic)
-        self.manager.publish(self.manager_status_topic, "I am Live " + self.manager_cid)
+        self.manager.subscribe(self._manager_status_topic)
+        self.manager.publish(self._manager_status_topic, "I am Live " + self.manager_cid)
 
     def stop(self):
         self.manager.on_message = None
-        self.manager.publish(self.manager_status_topic,
+        self.manager.publish(self._manager_status_topic,
                              "I am dieing Gracefully %s :-)" % self.manager_cid)
         self.manager.disconnect()
         self.manager.loop_stop()
@@ -110,9 +122,9 @@ class CoordinatorManager(object):
         return self.manager
 
     def topicwise_on_message(self, client, userdata, message):
-        if message.topic == self.manager_status_topic:
+        if message.topic == self._manager_status_topic:
             self.rebalance_start(client, userdata, message)
-        elif message.topic == self.negotiation_topic:
+        elif message.topic == self._negotiation_topic:
             self.random_number_acc(client, userdata, message)
 
     def rebalance_start(self, client, userdata, message):
@@ -141,7 +153,7 @@ class CoordinatorManager(object):
         threading._start_new_thread(self.consumer.disconnect, ())  # Disconnect async.
         self.randoms = []
 
-        self.manager.subscribe(self.negotiation_topic)
+        self.manager.subscribe(self._negotiation_topic)
 
         threading._start_new_thread(self.thread_exec, ())
         return 0
@@ -157,11 +169,11 @@ class CoordinatorManager(object):
         for i in range(6):
             logger.debug("sleeping " + str(i))
             # Keep publishing, so late comers will also get it.
-            self.manager.publish(self.negotiation_topic, self.manager_cid)
+            self.manager.publish(self._negotiation_topic, self.manager_cid)
             time.sleep(0.5)
 
         # Add validation here....
-        self.manager.unsubscribe(self.negotiation_topic)
+        self.manager.unsubscribe(self._negotiation_topic)
 
         self.randoms = list(set(self.randoms))
         self.randoms.sort()
