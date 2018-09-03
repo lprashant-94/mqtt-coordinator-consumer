@@ -118,11 +118,14 @@ class CoordinatorManager(object):
     def start(self):
         self.manager.connect(self.broker[0], port=self.broker[1])
         self.manager.will_set(self._manager_status_topic,
-                              "I am Unexpectedly Dieing, Please take care %s :-(" % self.manager_cid, qos=1)
+                              self.lwt_message(), qos=1)
         self.manager.on_message = self.topicwise_on_message
         self.manager.loop_start()
         self.manager.subscribe(self._manager_status_topic)
         self.manager.publish(self._manager_status_topic, "I am Live " + self.manager_cid)
+
+    def lwt_message(self):
+        return "I am Unexpectedly Dieing, Please take care %s :-(" % self.manager_cid
 
     def stop(self):
         self.manager.on_message = None
