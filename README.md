@@ -17,6 +17,7 @@ CoordinatorManager class is manager class for mqtt consumer. It lets you connect
 >>> consumer = manager.coordinated_consumer
 >>> consumer.on_message = on_message  # Pass callback name here.
 >>> consumer.subscribe("house/bulb")
+>>> consumer.poll(100)    # Batch message reading construct for streaming purpose
 ```
 
 ```
@@ -24,6 +25,11 @@ CoordinatorManager class is manager class for mqtt consumer. It lets you connect
 >>> consumer.disconnect()
 >>> manager.stop()
 ```
+
+There are 2 methods for consuming events, 
+- registering for on_message
+- Reading messages in batches. Batches are internally stored in memory, and not stored on persistent disc for now.
+
 
 ## MQTT Producer CoordinatedProducer
 

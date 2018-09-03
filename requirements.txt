@@ -1,0 +1,8 @@
+paho-mqtt==1.4.0
+# Dev & Test Dependencies
+coverage
+pycodestyle
+flake8
+autopep8
+pylint==1.9.0
+virtualenv

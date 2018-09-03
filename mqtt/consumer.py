@@ -1,11 +1,11 @@
 """Coordinated MQTT consumer."""
 import logging
+import Queue
 import random
 import threading
 import time
 
 import paho.mqtt.client as paho
-
 from utils.constants import NUMBER_OF_PARTITION
 
 logger = logging.getLogger(__name__)
@@ -16,6 +16,9 @@ class CoordinatedConsumer(object):
     clients = []
     on_message = None
     topics = []
+    batched_messages = Queue.Queue()
+    start_index = None
+    end_index = None
 
     def __init__(self, client_id, broker, clean_session=False, ):
         self.broker = broker
@@ -40,6 +43,9 @@ class CoordinatedConsumer(object):
             client.loop_start()
             self.clients.append(client)
         self._subscribe_all()
+
+    def assignment(self):
+        return "Subscribing From %r to %r" % (self.start_index, self.end_index)
 
     def subscribe(self, topic, qos=1):
         self.topics.append({'topic': topic, 'qos': qos})
@@ -67,10 +73,22 @@ class CoordinatedConsumer(object):
             client.disconnect()
             client.loop_stop()
         self.clients = []
+    close = disconnect
+
+    def poll(self, max=5000, timeout=0):
+        output = []
+        try:
+            output.append(self.batched_messages.get(block=True, timeout=timeout))
+            for _ in range(max - 1):
+                output.append(self.batched_messages.get_nowait())
+        except Queue.Empty:
+            pass
+        return output
 
     @staticmethod
     def log_message(client, userdata, message):
         logger.debug("received message =%s", str(message.payload.decode("utf-8")))
+        userdata['consumer'].batched_messages.put(message)
         if userdata['consumer'].on_message is not None:
             userdata['consumer'].on_message(client, userdata, message)
 
@@ -112,6 +130,7 @@ class CoordinatorManager(object):
                              "I am dieing Gracefully %s :-)" % self.manager_cid)
         self.manager.disconnect()
         self.manager.loop_stop()
+    close = stop
 
     @property
     def coordinated_consumer(self):
