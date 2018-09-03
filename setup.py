@@ -5,7 +5,7 @@ with open("README.md", "r") as fh:
 
 setuptools.setup(
     name="mqtt_coordinated",
-    version="0.0.1",
+    version="0.0.2",
     author="Prashant Lokhande",
     author_email="lprashant94@gmail.com",
     description="Coordinated Producer Consumer for MQTT",
