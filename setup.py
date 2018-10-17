@@ -14,7 +14,7 @@ setuptools.setup(
     url="https://github.com/lprashant-94/mqtt-coordinator-consumer",
     packages=setuptools.find_packages(),
     classifiers=(
-        "Programming Language :: Python :: 2",
+        "Programming Language :: Python :: 3",
         "Operating System :: OS Independent",
     ),
 )
