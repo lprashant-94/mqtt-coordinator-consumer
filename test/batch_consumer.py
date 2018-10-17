@@ -26,7 +26,7 @@ def on_message(client, userdata, message):
 
 
 def consumer():
-    manager = CoordinatorManager(CONSUMER_CLIENTID, BROKER)
+    manager = CoordinatorManager(CONSUMER_CLIENTID, BROKER, queue_file='my_queue_folder')
     manager.start()
 
     consumer = manager.coordinated_consumer
