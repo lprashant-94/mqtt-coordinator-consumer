@@ -1,12 +1,19 @@
 """Coordinated MQTT consumer."""
 import logging
-import Queue
 import random
+import sys
 import threading
 import time
 
 import paho.mqtt.client as paho
 from utils.constants import NUMBER_OF_PARTITION
+
+is_py2 = sys.version[0] == '2'
+if is_py2:
+    import Queue as queue  # diable pylint: Unable to import
+else:
+    import queue as queue
+
 
 logger = logging.getLogger(__name__)
 __author__ = "Prashant"
@@ -16,7 +23,7 @@ class CoordinatedConsumer(object):
     clients = []
     on_message = None
     topics = []
-    batched_messages = Queue.Queue()
+    batched_messages = queue.Queue()
     start_index = None
     end_index = None
 
@@ -35,7 +42,7 @@ class CoordinatedConsumer(object):
             raise AssertionError("Can't start Consumer, Clients are not disconnected")
         self.start_index = start_index if start_index is not None else self.start_index
         self.end_index = end_index if end_index is not None else self.end_index
-        for i in range(self.start_index, self.end_index):
+        for i in range(int(self.start_index), int(self.end_index)):
             client = paho.Client(self.client_id + str(i), clean_session=self.clean_session,
                                  userdata={'partition': i, 'consumer': self})
             client.connect(host=self.broker[0], port=self.broker[1])
@@ -81,7 +88,7 @@ class CoordinatedConsumer(object):
             output.append(self.batched_messages.get(block=True, timeout=timeout))
             for _ in range(max - 1):
                 output.append(self.batched_messages.get_nowait())
-        except Queue.Empty:
+        except queue.Empty:
             pass
         return output
 
@@ -116,9 +123,9 @@ class CoordinatorManager(object):
         self.manager = paho.Client(self.manager_cid, userdata={'consumer': self.consumer})
 
     def start(self):
-        self.manager.connect(self.broker[0], port=self.broker[1])
         self.manager.will_set(self._manager_status_topic,
-                              self.lwt_message(), qos=1)
+                              payload=self.lwt_message(), qos=1)
+        self.manager.connect(self.broker[0], port=self.broker[1])
         self.manager.on_message = self.topicwise_on_message
         self.manager.loop_start()
         self.manager.subscribe(self._manager_status_topic)
@@ -129,6 +136,7 @@ class CoordinatorManager(object):
 
     def stop(self):
         self.manager.on_message = None
+        logger.info("Publishing Message before dieing")
         self.manager.publish(self._manager_status_topic,
                              "I am dieing Gracefully %s :-)" % self.manager_cid)
         self.manager.disconnect()
@@ -180,6 +188,8 @@ class CoordinatorManager(object):
         threading._start_new_thread(self.thread_exec, ())
         return 0
 
+    __del__ = stop
+
     def thread_exec(self):
         """Reassign Partition numbers to consumer.
 
@@ -223,7 +233,7 @@ class CoordinatorManager(object):
 
     def random_number_acc(self, client, userdata, message):
         logger.info("Received message %s", message.payload)
-        self.randoms.append(message.payload)
+        self.randoms.append(message.payload.decode('ascii'))
 
 
 if __name__ == '__main__':

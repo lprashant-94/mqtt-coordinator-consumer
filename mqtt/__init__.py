@@ -1,2 +1,2 @@
-from consumer import CoordinatorManager
-from producer import CoordinatedProducer
+from mqtt.consumer import CoordinatorManager
+from mqtt.producer import CoordinatedProducer
