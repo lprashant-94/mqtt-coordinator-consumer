@@ -27,10 +27,13 @@ class CoordinatedConsumer(object):
     start_index = None
     end_index = None
 
-    def __init__(self, client_id, broker, clean_session=False, ):
+    def __init__(self, client_id, broker, clean_session=False, queue_file=None):
         self.broker = broker
         self.client_id = client_id
         self.clean_session = clean_session
+        if queue_file is not None:
+            from persistent_queue.pqueue import PersistentQueue
+            self.batched_messages = PersistentQueue(queue_file)
 
     def restart(self):
         self.disconnect()
@@ -115,10 +118,11 @@ class CoordinatorManager(object):
         manager_status_topic_s = "manager/{g_id}/rebalance"
         return manager_status_topic_s.format(g_id=self.group_id)
 
-    def __init__(self, group_id, host, port=1883):
+    def __init__(self, group_id, host, port=1883, queue_file=None):
         self.broker = (host, port)
         self.group_id = group_id
-        self.consumer = CoordinatedConsumer(self.group_id, self.broker, clean_session=False)
+        self.consumer = CoordinatedConsumer(
+            self.group_id, self.broker, clean_session=False, queue_file=queue_file)
         self.manager_cid = self.cid_fmt.format(g_id=self.group_id, salt=random.randint(0, 200))
         self.manager = paho.Client(self.manager_cid, userdata={'consumer': self.consumer})
 
