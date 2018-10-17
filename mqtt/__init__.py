@@ -1,2 +1,2 @@
-from mqtt.consumer import CoordinatorManager
+from mqtt.consumer.coordinated_manager import CoordinatorManager
 from mqtt.producer import CoordinatedProducer
