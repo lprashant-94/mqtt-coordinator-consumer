@@ -1,12 +1,8 @@
 """Coordinated MQTT consumer."""
 import logging
-import random
 import sys
-import threading
-import time
 
 import paho.mqtt.client as paho
-from utils.constants import NUMBER_OF_PARTITION
 
 is_py2 = sys.version[0] == '2'
 if is_py2:
@@ -82,11 +78,11 @@ class CoordinatedConsumer(object):
         self.clients = []
     close = disconnect
 
-    def poll(self, max=5000, timeout=0):
+    def poll(self, max_records=5000, timeout=0):
         output = []
         try:
             output.append(self.batched_messages.get(block=True, timeout=timeout))
-            for _ in range(max - 1):
+            for _ in range(max_records - 1):
                 output.append(self.batched_messages.get_nowait())
         except queue.Empty:
             pass

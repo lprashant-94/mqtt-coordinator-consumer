@@ -1,4 +1,17 @@
-"""Coordinated MQTT consumer."""
+"""Coordinated MQTT Manager.
+
+This module contains CoordinatorManager. Responsiblity of this module is to auto
+rebalance partitions, start Consumers.
+
+Below topics are used for management purpose
+1) manager/{group_id}/rebalance - Every message on this topic trigger rebalance.
+    Whenever new node joins cluster or some node dies, its responsiblity is to publish
+    a message on this topic. Use will message for unexpectedly dieing nodes.
+2) manager/{group_id}/negotiate - Once rebalance Starts, participents have to publish
+    their client id in negotiation topic. Every one will then subscribe to this topic.
+    This is how everyone will know how many clients are connected. Using range partitions
+    these nodes will divide available partitions.
+"""
 import logging
 import random
 import sys
