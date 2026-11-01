@@ -4,7 +4,7 @@ coverage
 pycodestyle
 flake8
 autopep8
-pylint==1.9.0
+pylint==4.0.9
 virtualenv
 # Release dependencies
 setuptools
